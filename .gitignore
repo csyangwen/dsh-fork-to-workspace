@@ -1,0 +1,7 @@
+# 依赖与构建产物
+node_modules/
+*.log
+.DS_Store
+
+# 本地备份目录
+lib.bak-*/
