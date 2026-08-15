@@ -174,6 +174,18 @@ test('导入：写入持久化 + cwd 改写为目标工作区', async () => {
   assert.deepEqual(ctx._created.map(c => c.id), ['session-in-1'])
 })
 
+test('导入：指定目标工作区时调用 attachSession 登记成员', async () => {
+  const ctx = makeCtx()
+  const attached = []
+  const target = {
+    id: 'ws-t', title: '项目B', path: '/target/project-b',
+    attachSession(id) { attached.push(id) },
+  }
+  const zip = buildZip([{ name: 'session.jsonl', data: Buffer.from(sampleLogText('session-in-4'), 'utf8') }])
+  const result = await importSession(ctx, zip, target)
+  assert.deepEqual(attached, [result.sessionId])
+})
+
 test('导入：保留原 cwd（无目标工作区）', async () => {
   const ctx = makeCtx()
   const zip = buildZip([{ name: 'session.jsonl', data: Buffer.from(sampleLogText('session-in-2'), 'utf8') }])
@@ -208,11 +220,19 @@ test('导入：附件写回 attachments/v1/objects/<2>/<hash>', async () => {
   }
 })
 
-test('导入：重复会话 id 拒绝', async () => {
+test('导入：重复 id 自动复制为新 id（不覆盖原会话）', async () => {
   const ctx = makeCtx()
   const zip = buildZip([{ name: 'session.jsonl', data: Buffer.from(sampleLogText('session-dup'), 'utf8') }])
-  await importSession(ctx, zip, undefined)
-  await assert.rejects(() => importSession(ctx, zip, undefined), /已存在/)
+  const first = await importSession(ctx, zip, undefined)
+  assert.equal(first.sessionId, 'session-dup')
+  assert.equal(first.copiedFrom, undefined)
+  const second = await importSession(ctx, zip, undefined)
+  assert.notEqual(second.sessionId, 'session-dup')
+  assert.equal(second.copiedFrom, 'session-dup')
+  assert.match(second.sessionId, /^session-/)
+  // 原会话不被覆盖，副本事件完整。
+  assert.equal(ctx._stored.get('session-dup').events.length, 7)
+  assert.equal(ctx._stored.get(second.sessionId).events.length, 7)
 })
 
 test('导入：坏 zip / 缺 session.jsonl / 路径穿越防御', async () => {

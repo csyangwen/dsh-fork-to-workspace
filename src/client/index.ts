@@ -47,6 +47,12 @@ const FORK_ITEM_PATTERNS = ['分叉会话', 'Fork session']
 /** 会话行三点按钮 aria-label 前缀（zh/en；工作区行是「工作区“…”，不命中）。 */
 const SESSION_ARIA_PREFIXES = ['会话“', 'Session actions for ']
 
+/** 工作区行三点按钮 aria-label 前缀（zh/en）。 */
+const WORKSPACE_ARIA_PREFIXES = ['工作区“', 'Workspace actions for ']
+
+/** 工作区行菜单（重命名/删除工作区）的「删除工作区」行文案（zh/en；精确匹配）。 */
+const DELETE_WORKSPACE_PATTERNS = ['删除工作区', 'Delete workspace']
+
 /** 已注入「分叉会话到其他工作区…」的菜单标记（幂等，React 重开菜单后标记随旧节点销毁）。 */
 const MENU_INJECTED_ATTR = 'data-fw-menu-injected'
 
@@ -168,13 +174,13 @@ function resolveSessionIdFromRow(ctx: Context, row: HTMLElement | null): Session
 }
 
 /**
- * 扫描侧边栏会话行菜单：出现含「分叉会话」行的菜单时，在其后注入三个入口：
- * 「分叉会话到其他工作区…」「导出会话…」「导入会话…」
+ * 扫描侧边栏**会话行**菜单：出现含「分叉会话」行的菜单时，在其后注入两个
+ * 入口：「分叉会话到其他工作区…」「导出会话…」
  * （原生 DOM + 内联 SVG 图标，随菜单生命周期自动销毁，无泄漏）。
  * @param ctx - 客户端上下文。
  * @param getRow - 最近一次打开菜单的会话行读取器。
  */
-function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null): void {
+function injectSessionMenuItems(ctx: Context, getRow: () => HTMLElement | null): void {
   for (const menu of document.querySelectorAll<HTMLElement>('[role="menu"]')) {
     if (menu.hasAttribute(MENU_INJECTED_ATTR)) continue
     const forkItem = findMenuItem(menu, FORK_ITEM_PATTERNS)
@@ -182,13 +188,13 @@ function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null):
     menu.setAttribute(MENU_INJECTED_ATTR, '')
 
     // ① 分叉会话到其他工作区…
-    const forkItem2 = document.createElement('button')
-    forkItem2.type = 'button'
-    forkItem2.setAttribute('role', 'menuitem')
-    forkItem2.className = 'fw-menuitem'
-    forkItem2.innerHTML = `<span class="fw-menuitem-icon">${BRANCH_ICON_SVG}</span>`
+    const forkToWorkspaceItem = document.createElement('button')
+    forkToWorkspaceItem.type = 'button'
+    forkToWorkspaceItem.setAttribute('role', 'menuitem')
+    forkToWorkspaceItem.className = 'fw-menuitem'
+    forkToWorkspaceItem.innerHTML = `<span class="fw-menuitem-icon">${BRANCH_ICON_SVG}</span>`
       + `<span class="fw-menuitem-label">${t('menu.forkToWorkspace')}</span>`
-    forkItem2.addEventListener('click', (event) => {
+    forkToWorkspaceItem.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()
       closeOpenMenu()
@@ -219,7 +225,40 @@ function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null):
       downloadSessionZip(sessionId)
     })
 
-    // ③ 导入会话…（打开导入对话框）
+    forkItem.after(forkToWorkspaceItem, exportItem)
+  }
+}
+
+/**
+ * 从工作区行元素反查工作区 id：行内三点按钮 aria-label（官方模板
+ * 「工作区“{title}”的操作」）→ 匹配 workspaces 视图 title。
+ * @param ctx - 客户端上下文。
+ * @param row - 工作区行元素（[role="treeitem"][aria-expanded]）。
+ * @returns 工作区 id；无法唯一确定时返回 null。
+ */
+function resolveWorkspaceIdFromRow(ctx: Context, row: HTMLElement | null): string | null {
+  if (row === null) return null
+  const label = row.querySelector('button[aria-label]')?.getAttribute('aria-label') ?? ''
+  const matches = ctx.workspaces.list.getSnapshot().items.filter(workspace =>
+    workspace.title !== undefined && workspace.title !== ''
+    && label.includes(workspace.title))
+  return matches.length === 1 ? matches[0].workspaceId : null
+}
+
+/**
+ * 扫描侧边栏**工作区行**菜单（重命名/删除工作区）：在菜单里注入
+ * 「导入会话到该工作区…」入口。导入是"面向工作区"的动作，放在工作区行的
+ * 三点菜单里语义最清晰（与会话行菜单的"作用于会话"入口区分开）。
+ * @param ctx - 客户端上下文。
+ * @param getRow - 最近一次打开菜单的工作区行读取器。
+ */
+function injectWorkspaceMenuItems(ctx: Context, getRow: () => HTMLElement | null): void {
+  for (const menu of document.querySelectorAll<HTMLElement>('[role="menu"]')) {
+    if (menu.hasAttribute(MENU_INJECTED_ATTR)) continue
+    const deleteItem = findMenuItem(menu, DELETE_WORKSPACE_PATTERNS)
+    if (deleteItem === null) continue // 会话行菜单等不含「删除工作区」行的菜单不注入
+    menu.setAttribute(MENU_INJECTED_ATTR, '')
+
     const importItem = document.createElement('button')
     importItem.type = 'button'
     importItem.setAttribute('role', 'menuitem')
@@ -230,10 +269,11 @@ function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null):
       event.preventDefault()
       event.stopPropagation()
       closeOpenMenu()
-      openImportDialog(ctx)
+      // 预选当前工作区行对应的工作区（解析失败则让用户在对话框里手选）。
+      const defaultWorkspaceId = resolveWorkspaceIdFromRow(ctx, getRow())
+      openImportDialog(ctx, defaultWorkspaceId === null ? undefined : defaultWorkspaceId)
     })
-
-    forkItem.after(forkItem2, exportItem, importItem)
+    deleteItem.after(importItem)
   }
 }
 
@@ -362,13 +402,15 @@ function openForkDialog(ctx: Context, opts: { sessionId: string; atSeq?: number 
 /**
  * 打开导入会话对话框（挂到 body，关闭即卸载）。
  * @param ctx - 客户端上下文。
+ * @param defaultWorkspaceId - 预选的目标工作区 id（来自工作区行菜单）。
  */
-function openImportDialog(ctx: Context): void {
+function openImportDialog(ctx: Context, defaultWorkspaceId?: string): void {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
   root.render(createElement(ImportDialog, {
     ctx,
+    ...(defaultWorkspaceId === undefined ? {} : { defaultWorkspaceId }),
     onClose: () => {
       root.unmount()
       host.remove()
@@ -391,17 +433,24 @@ export function apply(ctx: Context): void {
   document.head.appendChild(styleEl)
   ctx.effect(() => () => { styleEl.remove() })
 
-  // 2) 记录最近一次打开三点菜单的会话行（capture 阶段先于 React 冒泡执行，
-  //    且不阻止默认行为——只做记录）。
+  // 2) 记录最近一次打开三点菜单的会话行 / 工作区行（capture 阶段先于 React
+  //    冒泡执行，且不阻止默认行为——只做记录）。菜单是 portal 渲染到 body 的，
+  //    本身不带所属行信息，只能靠点击锚点时记录。
   let lastSessionRow: HTMLElement | null = null
+  let lastWorkspaceRow: HTMLElement | null = null
   const onRowClickCapture = (event: Event): void => {
     const target = event.target
     if (!(target instanceof Element)) return
     const button = target.closest('button')
     if (button === null) return
     const label = button.getAttribute('aria-label') ?? ''
-    if (!SESSION_ARIA_PREFIXES.some(prefix => label.startsWith(prefix))) return
-    lastSessionRow = button.closest<HTMLElement>('[role="treeitem"]')
+    if (SESSION_ARIA_PREFIXES.some(prefix => label.startsWith(prefix))) {
+      lastSessionRow = button.closest<HTMLElement>('[role="treeitem"]')
+      return
+    }
+    if (WORKSPACE_ARIA_PREFIXES.some(prefix => label.startsWith(prefix))) {
+      lastWorkspaceRow = button.closest<HTMLElement>('[role="treeitem"]')
+    }
   }
   document.addEventListener('click', onRowClickCapture, true)
   ctx.effect(() => () => document.removeEventListener('click', onRowClickCapture, true))
@@ -435,7 +484,8 @@ export function apply(ctx: Context): void {
   const scan = (): void => {
     raf = 0
     if (disposed) return
-    injectSidebarMenuItems(ctx, () => lastSessionRow)
+    injectSessionMenuItems(ctx, () => lastSessionRow)
+    injectWorkspaceMenuItems(ctx, () => lastWorkspaceRow)
     enableBranchButtons()
   }
   const observer = new MutationObserver(() => {

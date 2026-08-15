@@ -20,8 +20,12 @@ const DICT: Record<string, { zh: string; en: string }> = {
     en: 'Export session…',
   },
   'menu.importSession': {
-    zh: '导入会话…',
-    en: 'Import session…',
+    zh: '导入会话到该工作区…',
+    en: 'Import session into this workspace…',
+  },
+  'import.note': {
+    zh: '导入会新增一个独立会话（保留 zip 内的原始会话 id），不会替换或删除任何现有会话。',
+    en: 'Importing creates a new independent session (keeping the original session id from the zip). Nothing existing is replaced or deleted.',
   },
   'export.failed': {
     zh: '导出失败：{message}',
@@ -62,6 +66,10 @@ const DICT: Record<string, { zh: string; en: string }> = {
   'import.success': {
     zh: '导入成功：{sessionId}（{events} 条事件，{attachments} 个附件）',
     en: 'Imported: {sessionId} ({events} events, {attachments} attachments)',
+  },
+  'import.copied': {
+    zh: '原会话 id {from} 已存在，本次自动复制为新 id：{to}（原会话未改动）。',
+    en: 'Session id {from} already existed; imported as a copy with new id: {to} (the original is untouched).',
   },
   'import.failed': {
     zh: '导入失败：{message}',

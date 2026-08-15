@@ -12,7 +12,7 @@ import { t } from './texts.ts'
 
 /** 导入端点响应。 */
 type ImportResponse =
-  | { ok: true; sessionId: string; eventsImported: number; attachmentsImported: number; warnings?: readonly string[] }
+  | { ok: true; sessionId: string; copiedFrom?: string; eventsImported: number; attachmentsImported: number; warnings?: readonly string[] }
   | { ok: false; error: string; code?: string }
 
 /** 对话框状态机。 */
@@ -22,6 +22,8 @@ type Phase = 'idle' | 'importing' | 'done' | 'failed'
 export interface ImportDialogProps {
   /** 客户端根上下文（sessions/workspaces 服务）。 */
   ctx: Context
+  /** 预选的目标工作区 id（从工作区行菜单进入时自动带入）。 */
+  defaultWorkspaceId?: string
   /** 关闭对话框。 */
   onClose: () => void
 }
@@ -31,12 +33,12 @@ export interface ImportDialogProps {
  * @param props - 见 {@link ImportDialogProps}。
  * @returns 对话框元素。
  */
-export function ImportDialog({ ctx, onClose }: ImportDialogProps) {
+export function ImportDialog({ ctx, defaultWorkspaceId, onClose }: ImportDialogProps) {
   const [phase, setPhase] = React.useState<Phase>('idle')
   const [error, setError] = React.useState('')
   const [file, setFile] = React.useState<File | null>(null)
-  const [workspaceId, setWorkspaceId] = React.useState<string>('')
-  const [result, setResult] = React.useState<{ sessionId: string; events: number; attachments: number } | null>(null)
+  const [workspaceId, setWorkspaceId] = React.useState<string>(defaultWorkspaceId ?? '')
+  const [result, setResult] = React.useState<{ sessionId: string; copiedFrom?: string; events: number; attachments: number } | null>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -84,7 +86,7 @@ export function ImportDialog({ ctx, onClose }: ImportDialogProps) {
           setError(t('import.failed', { message: data.error }))
           return
         }
-        setResult({ sessionId: data.sessionId, events: data.eventsImported, attachments: data.attachmentsImported })
+        setResult({ sessionId: data.sessionId, ...(data.copiedFrom === undefined ? {} : { copiedFrom: data.copiedFrom }), events: data.eventsImported, attachments: data.attachmentsImported })
         setPhase('done')
         // 刷新会话列表，让导入的会话进入客户端快照（refresh 在运行时公开，
         // 但不在 ISessions 接口类型上，这里按运行时形状调用）。
@@ -130,6 +132,7 @@ export function ImportDialog({ ctx, onClose }: ImportDialogProps) {
           <span className="fw-menuitem-icon"><IconDownloadOutline16 /></span>
           {t('import.title')}
         </h2>
+        <p className="fw-dialog-hint">{t('import.note')}</p>
 
         {/* 文件选择 */}
         <div className="fw-dialog-section">{t('import.file')}</div>
@@ -178,13 +181,20 @@ export function ImportDialog({ ctx, onClose }: ImportDialogProps) {
         )}
 
         {phase === 'done' && result !== null && (
-          <div className="fw-dialog-success">
-            {t('import.success', {
-              sessionId: result.sessionId,
-              events: String(result.events),
-              attachments: String(result.attachments),
-            })}
-          </div>
+          <>
+            <div className="fw-dialog-success">
+              {t('import.success', {
+                sessionId: result.sessionId,
+                events: String(result.events),
+                attachments: String(result.attachments),
+              })}
+            </div>
+            {result.copiedFrom !== undefined && (
+              <div className="fw-dialog-hint">
+                {t('import.copied', { from: result.copiedFrom, to: result.sessionId })}
+              </div>
+            )}
+          </>
         )}
 
         {phase === 'importing' && <p className="fw-dialog-hint">{t('import.importing')}</p>}
