@@ -80,8 +80,6 @@ dsh plugin --profile web add "link:$HOME/.dsh/plugins/dsh-fork-to-workspace"
 2. 目标机器：会话行「…」菜单 →「导入会话…」→ 选择 zip →（可选）选择目标工作区 →「导入」；
 3. 导入成功后点击「打开会话」即可继续对话。
 
-> 注意：会话记录的 agent preset（如 `anchored-standard`）需要在目标 DSH 中同样安装，否则打开会话会失败。
-
 **入口二：会话内分支按钮**
 
 1. 打开源会话，找到某一轮末尾的「在新对话中分支」按钮；
@@ -89,6 +87,16 @@ dsh plugin --profile web add "link:$HOME/.dsh/plugins/dsh-fork-to-workspace"
    - **克隆到当前工作区**：与官方分叉一致，立即在本工作区创建分支会话；
    - **克隆到其他工作区…**：弹出目标工作区选择，把**该轮为止**的会话克隆过去；
 3. 官方仅允许从最后一个已完成回合分支，本插件会启用所有回合的分支按钮，**任意一轮都可克隆**。
+
+## 预设（Preset）依赖
+
+克隆和导入的会话都会**继承源会话实际运行的 agent preset**（记录在会话 header 与事件日志中，例如 `anchored-standard`），这是性能基线的一部分——**分支历史 + 预设组合，两者会一起带过去**：
+
+- **克隆（分叉）**：子会话继承源会话的 preset，在同一台机器上克隆通常没有问题（preset 已安装）；
+- **导入到其他机器**：目标 DSH **必须安装同名 preset**，否则打开导入的会话会失败（agent 组合构建失败）。安装方式见
+  [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) 的 README——把它的 `preset` 目录复制到目标机器的
+  `~/.dsh/.agent-presets/<preset-id>/` 并重启 DSH；
+- 目标机器**没有**该 preset 时，可以先用 `dsh` 在会话创建时选择官方默认预设，但**不要**把这种会话与克隆/导入的会话混为一谈——克隆/导入的会话固定使用其记录中的预设。
 
 ## 工作原理
 

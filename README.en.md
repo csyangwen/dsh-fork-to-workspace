@@ -123,6 +123,24 @@ sidebar session menu.
 3. The official UI only allows branching from the last completed turn; this
    plugin enables every turn's branch button, so **any turn can be cloned**.
 
+## Preset dependency
+
+Cloned and imported sessions **inherit the agent preset the source session
+actually ran** (recorded in the session header and event log, e.g.
+`anchored-standard`) — it is part of the performance baseline, and it travels
+with the branch:
+
+- **Clone (fork)**: the child inherits the source's preset; on the same
+  machine this is usually a no-op (the preset is already installed);
+- **Import on another machine**: the target DSH **must have the same preset
+  installed**, otherwise opening the imported session fails (agent composition
+  cannot be built). See the
+  [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard)
+  README — copy its `preset` directory to
+  `~/.dsh/.agent-presets/<preset-id>/` on the target machine and restart DSH;
+- If the target machine lacks the preset, prefer installing it — imported /
+  cloned sessions are pinned to the preset recorded in their history.
+
 ## How it works
 
 - **Fork semantics align with the official fork**: the child's event seed is
