@@ -15,6 +15,66 @@ const DICT: Record<string, { zh: string; en: string }> = {
     zh: '分叉会话到其他工作区…',
     en: 'Fork session to another workspace…',
   },
+  'menu.exportSession': {
+    zh: '导出会话…',
+    en: 'Export session…',
+  },
+  'menu.importSession': {
+    zh: '导入会话…',
+    en: 'Import session…',
+  },
+  'export.failed': {
+    zh: '导出失败：{message}',
+    en: 'Export failed: {message}',
+  },
+  'import.title': {
+    zh: '导入会话',
+    en: 'Import session',
+  },
+  'import.file': {
+    zh: '选择会话包（dsh-session-*.zip，由本插件或官方导出）',
+    en: 'Choose a session package (dsh-session-*.zip, exported by this plugin)',
+  },
+  'import.browse': {
+    zh: '选择 zip 文件',
+    en: 'Choose zip file',
+  },
+  'import.picked': {
+    zh: '已选择：{name}（{size}）',
+    en: 'Selected: {name} ({size})',
+  },
+  'import.workspace': {
+    zh: '目标工作区（可选；不选则保留会话原有目录，导入后出现在「未分组」）',
+    en: 'Target workspace (optional; keep the original directory otherwise, session appears under Ungrouped)',
+  },
+  'import.keep': {
+    zh: '保留原目录（未分组）',
+    en: 'Keep original directory (Ungrouped)',
+  },
+  'import.button': {
+    zh: '导入',
+    en: 'Import',
+  },
+  'import.importing': {
+    zh: '正在导入…',
+    en: 'Importing…',
+  },
+  'import.success': {
+    zh: '导入成功：{sessionId}（{events} 条事件，{attachments} 个附件）',
+    en: 'Imported: {sessionId} ({events} events, {attachments} attachments)',
+  },
+  'import.failed': {
+    zh: '导入失败：{message}',
+    en: 'Import failed: {message}',
+  },
+  'import.open': {
+    zh: '打开会话',
+    en: 'Open session',
+  },
+  'import.warning': {
+    zh: '注意：会话记录的 agent preset 需要在当前 DSH 中存在（如 anchored-standard），否则打开会失败。',
+    en: 'Note: the session\'s agent preset must exist in this DSH (e.g. anchored-standard), otherwise opening will fail.',
+  },
   'branch.menuTitle': {
     zh: '克隆此会话分支',
     en: 'Clone this session branch',

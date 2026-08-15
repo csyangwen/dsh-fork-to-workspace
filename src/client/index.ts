@@ -29,6 +29,7 @@ import styles from './styles.css'
 import { t } from './texts.ts'
 import { BranchMenu } from './BranchMenu.tsx'
 import { ForkDialog } from './ForkDialog.tsx'
+import { ImportDialog } from './ImportDialog.tsx'
 
 /** 本插件需要的客户端服务。 */
 export const inject = ['sessions', 'workspaces']
@@ -55,6 +56,11 @@ const BRANCH_ENABLED_ATTR = 'data-fw-branch-enabled'
 /** 注入菜单项用的分支图标 SVG（与官方 IconBranchOutline16 同 path）。 */
 const BRANCH_ICON_SVG = '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
   + '<path fillRule="evenodd" clipRule="evenodd" d="M13.0762 1.37207C14.0846 1.37228 14.9021 2.19077 14.9023 3.19922C14.9022 4.20772 14.0847 5.02518 13.0762 5.02539C12.2967 5.02539 11.6325 4.53691 11.3701 3.84961H4.35547C4.79397 4.26458 5.15861 4.7644 5.41699 5.33496L7.10645 9.06738C7.88526 10.7875 9.55104 11.9228 11.4189 12.0371C11.7085 11.4109 12.3411 10.9756 13.0762 10.9756C14.0843 10.9759 14.9023 11.7936 14.9023 12.8018C14.9023 13.81 14.0843 14.6277 13.0762 14.6279C12.2534 14.6279 11.5574 14.0832 11.3291 13.335C8.9868 13.1879 6.89981 11.7612 5.92285 9.60352L4.23242 5.87109C3.67503 4.64033 2.44878 3.84961 1.09766 3.84961V2.54883C1.10665 2.54883 1.11601 2.54975 1.125 2.5498L11.3701 2.54883C11.6326 1.86151 12.2969 1.37207 13.0762 1.37207ZM13.0762 12.2764C12.7858 12.2764 12.5508 12.5114 12.5508 12.8018C12.5508 13.0921 12.7858 13.3281 13.0762 13.3281C13.3664 13.3279 13.6025 13.092 13.6025 12.8018C13.6025 12.5115 13.3664 12.2766 13.0762 12.2764ZM13.0762 2.67285C12.7855 2.67285 12.55 2.90861 12.5498 3.19922C12.5499 3.48987 12.7855 3.72559 13.0762 3.72559C13.3667 3.72538 13.6024 3.48975 13.6025 3.19922C13.6023 2.90874 13.3666 2.67306 13.0762 2.67285Z" fill="currentColor"/>'
+  + '</svg>'
+
+/** 注入菜单项用的下载图标 SVG（与官方 IconDownloadOutline16 同 path）。 */
+const DOWNLOAD_ICON_SVG = '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+  + '<path d="M15.3695 11.411L15.1234 12.8866C14.8869 14.3042 13.6603 15.3436 12.223 15.3436H3.77673C2.33958 15.3434 1.1128 14.3042 0.876343 12.8866L0.630249 11.411L2.05408 11.1747L2.29919 12.6493C2.41973 13.3713 3.04475 13.9001 3.77673 13.9003H12.223C12.9551 13.9002 13.58 13.3713 13.7006 12.6493L13.9457 11.1747L15.3695 11.411ZM8.72205 8.994C8.77717 8.93934 8.83792 8.88106 8.90271 8.81627L12.4828 5.23424L13.5043 6.25572L9.92224 9.8358C9.6395 10.1185 9.38763 10.3732 9.15857 10.5575C8.91892 10.7503 8.63953 10.9224 8.2865 10.9784C8.09711 11.0083 7.90363 11.0083 7.71423 10.9784C7.36106 10.9224 7.0809 10.7503 6.84119 10.5575C6.61215 10.3732 6.36022 10.1185 6.07751 9.8358L2.49646 6.25572L3.51697 5.23424L7.09705 8.81627C7.16219 8.88142 7.22331 8.94006 7.27869 8.99498V1.3065H8.72205V8.994Z" fill="currentColor"/>'
   + '</svg>'
 
 // ---------------------------------------------------------------------------
@@ -162,9 +168,9 @@ function resolveSessionIdFromRow(ctx: Context, row: HTMLElement | null): Session
 }
 
 /**
- * 扫描侧边栏会话行菜单：出现含「分叉会话」行的菜单时，在其后注入
- * 「分叉会话到其他工作区…」入口（原生 DOM + 内联 SVG 图标，随菜单生命周期
- * 自动销毁，无泄漏）。
+ * 扫描侧边栏会话行菜单：出现含「分叉会话」行的菜单时，在其后注入三个入口：
+ * 「分叉会话到其他工作区…」「导出会话…」「导入会话…」
+ * （原生 DOM + 内联 SVG 图标，随菜单生命周期自动销毁，无泄漏）。
  * @param ctx - 客户端上下文。
  * @param getRow - 最近一次打开菜单的会话行读取器。
  */
@@ -174,14 +180,15 @@ function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null):
     const forkItem = findMenuItem(menu, FORK_ITEM_PATTERNS)
     if (forkItem === null) continue // 工作区菜单等不含「分叉会话」行的菜单不注入
     menu.setAttribute(MENU_INJECTED_ATTR, '')
-    const item = document.createElement('button')
-    item.type = 'button'
-    item.setAttribute('role', 'menuitem')
-    item.className = 'fw-menuitem'
-    // 文案来自本插件字典，无用户输入，安全内联。
-    item.innerHTML = `<span class="fw-menuitem-icon">${BRANCH_ICON_SVG}</span>`
+
+    // ① 分叉会话到其他工作区…
+    const forkItem2 = document.createElement('button')
+    forkItem2.type = 'button'
+    forkItem2.setAttribute('role', 'menuitem')
+    forkItem2.className = 'fw-menuitem'
+    forkItem2.innerHTML = `<span class="fw-menuitem-icon">${BRANCH_ICON_SVG}</span>`
       + `<span class="fw-menuitem-label">${t('menu.forkToWorkspace')}</span>`
-    item.addEventListener('click', (event) => {
+    forkItem2.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()
       closeOpenMenu()
@@ -192,7 +199,69 @@ function injectSidebarMenuItems(ctx: Context, getRow: () => HTMLElement | null):
       }
       openForkDialog(ctx, { sessionId })
     })
-    forkItem.after(item)
+
+    // ② 导出会话…（下载 dsh-session-<id>.zip）
+    const exportItem = document.createElement('button')
+    exportItem.type = 'button'
+    exportItem.setAttribute('role', 'menuitem')
+    exportItem.className = 'fw-menuitem'
+    exportItem.innerHTML = `<span class="fw-menuitem-icon">${DOWNLOAD_ICON_SVG}</span>`
+      + `<span class="fw-menuitem-label">${t('menu.exportSession')}</span>`
+    exportItem.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      closeOpenMenu()
+      const sessionId = resolveSessionIdFromRow(ctx, getRow())
+      if (sessionId === null) {
+        window.alert(t('dialog.resolveFailed'))
+        return
+      }
+      downloadSessionZip(sessionId)
+    })
+
+    // ③ 导入会话…（打开导入对话框）
+    const importItem = document.createElement('button')
+    importItem.type = 'button'
+    importItem.setAttribute('role', 'menuitem')
+    importItem.className = 'fw-menuitem'
+    importItem.innerHTML = `<span class="fw-menuitem-icon">${DOWNLOAD_ICON_SVG}</span>`
+      + `<span class="fw-menuitem-label">${t('menu.importSession')}</span>`
+    importItem.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      closeOpenMenu()
+      openImportDialog(ctx)
+    })
+
+    forkItem.after(forkItem2, exportItem, importItem)
+  }
+}
+
+/**
+ * 下载会话导出 zip（GET /dsh-fork-ws/export → blob → a[download]）。
+ * @param sessionId - 源会话 id。
+ */
+async function downloadSessionZip(sessionId: string): Promise<void> {
+  try {
+    const res = await fetch(`/dsh-fork-ws/export?sessionId=${encodeURIComponent(sessionId)}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null
+      window.alert(t('export.failed', { message: body?.error ?? `HTTP ${res.status}` }))
+      return
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `dsh-session-${sessionId}.zip`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    setTimeout(() => { URL.revokeObjectURL(url) }, 2000)
+  } catch (cause: unknown) {
+    window.alert(t('export.failed', {
+      message: cause instanceof Error ? cause.message : String(cause),
+    }))
   }
 }
 
@@ -282,6 +351,23 @@ function openForkDialog(ctx: Context, opts: { sessionId: string; atSeq?: number 
   const root = createRoot(host)
   root.render(createElement(ForkDialog, {
     ...opts,
+    ctx,
+    onClose: () => {
+      root.unmount()
+      host.remove()
+    },
+  }))
+}
+
+/**
+ * 打开导入会话对话框（挂到 body，关闭即卸载）。
+ * @param ctx - 客户端上下文。
+ */
+function openImportDialog(ctx: Context): void {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  root.render(createElement(ImportDialog, {
     ctx,
     onClose: () => {
       root.unmount()

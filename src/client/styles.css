@@ -243,3 +243,34 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ---------- 导入会话对话框 ---------- */
+.fw-import-browse {
+  margin-bottom: 8px;
+}
+
+.fw-import-workspace-select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.fw-dialog-success {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  word-break: break-all;
+}
