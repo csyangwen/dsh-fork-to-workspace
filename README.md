@@ -42,6 +42,10 @@ DeepSeek Harness 的会话是一棵分支树：从同一会话的不同轮次（
 - **会话内「在新对话中分支」按钮升级为二选一**
   - **克隆到当前工作区**：与官方分叉行为一致（同工作区、标题自增、自动打开）；
   - **克隆到其他工作区…**：支持**任意轮次**——官方禁用的非末尾回合分支按钮也会被启用，从任意一轮都能克隆到目标工作区。
+- **分叉时可选 Agent 预设**
+  - 分叉对话框增加「Agent 预设」下拉：默认**保持源会话预设**（向后兼容），也可选择本机任意预设（系统内置 + 本地自建，损坏的预设自动禁用并显示原因）；
+  - 换预设只影响分叉后**继续对话**的轮次（工具面与人格由所选预设组合），历史消息与已完成回合原样保留；
+  - 例如：把 `anchored-standard` 的高质量分支换到官方 `standard` 对照测试，或换到自建的「anchored + 自定义插件」组合预设——预设与插件可以自由组合。
 - **会话导出 / 导入（跨机器迁移）**
   - **导出会话…**：把会话（完整日志 + 图片附件）打包成 `dsh-session-<id>.zip` 下载（与官方导出同格式）；
   - **导入会话…**：选择 zip 文件 + 目标工作区，把会话完整写入当前 DSH（日志按本机压缩格式落盘、附件按内容寻址写回），刷新后出现在目标工作区分组下，可直接打开继续对话；
@@ -79,7 +83,7 @@ dsh plugin --profile web add "link:$HOME/.dsh/plugins/dsh-fork-to-workspace"
 
 1. 鼠标悬停任意会话行，点击行尾「…」；
 2. 菜单选择「分叉会话到其他工作区…」；
-3. 在弹出的对话框里点选目标工作区（目录），点击「克隆到该工作区」；
+3. 在弹出的对话框里**可选**「Agent 预设」（不选 = 保持源会话预设），点选目标工作区（目录），点击「克隆到该工作区」；
 4. 新会话创建并自动打开，标题为「原标题 (1)」，位于目标工作区分组下。
 
 **入口三：导出 / 导入会话（跨机器迁移）**
@@ -93,14 +97,14 @@ dsh plugin --profile web add "link:$HOME/.dsh/plugins/dsh-fork-to-workspace"
 1. 打开源会话，找到某一轮末尾的「在新对话中分支」按钮；
 2. 点击后弹出两个选项：
    - **克隆到当前工作区**：与官方分叉一致，立即在本工作区创建分支会话；
-   - **克隆到其他工作区…**：弹出目标工作区选择，把**该轮为止**的会话克隆过去；
+   - **克隆到其他工作区…**：弹出目标工作区选择（同样可选预设），把**该轮为止**的会话克隆过去；
 3. 官方仅允许从最后一个已完成回合分支，本插件会启用所有回合的分支按钮，**任意一轮都可克隆**。
 
 ## 预设（Preset）依赖
 
 克隆和导入的会话都会**继承源会话实际运行的 agent preset**（记录在会话 header 与事件日志中，例如 `anchored-standard`），这是性能基线的一部分——**分支历史 + 预设组合，两者会一起带过去**：
 
-- **克隆（分叉）**：子会话继承源会话的 preset，在同一台机器上克隆通常没有问题（preset 已安装）；
+- **克隆（分叉）**：子会话默认继承源会话的 preset，在同一台机器上克隆通常没有问题（preset 已安装）；也可以**在分叉对话框里显式换预设**——换预设后，子会话的事件日志里最新一次 `agent-preset/selected` 会同步为新值（官方解析规则是「事件最新选择优先于 header」，只改 header 不会生效），打开会话即按所选预设组合 agent；
 - **导入到其他机器**：目标 DSH **必须安装同名 preset**，否则打开导入的会话会失败（agent 组合构建失败）。安装方式见
   [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) 的 README——把它的 `preset` 目录复制到目标机器的
   `~/.dsh/.agent-presets/<preset-id>/` 并重启 DSH；
@@ -110,7 +114,7 @@ dsh plugin --profile web add "link:$HOME/.dsh/plugins/dsh-fork-to-workspace"
 
 - **克隆语义与官方分叉对齐**：子会话的事件种子 = 源会话截至目标边界（最后一个已完成回合，或 atSeq 锚定的回合）的完整事件前缀；子会话继承源会话的 agent preset 与模型配置。
 - **跨工作区归属的关键**：DSH 中会话归属于工作区的唯一判据是「会话 `header.cwd` 的 canonical 路径 === 工作区目录」。插件创建子会话时直接把 `cwd` 设为目标工作区路径，再经官方 `workspace.attachSession` 校验挂载，因此子会话天然出现在目标工作区分组下。
-- **宿主端**：零依赖的 `lib/index.js`，通过 `webServer` 服务注册两个 API——`GET /dsh-fork-ws/prepare`（源会话信息 + 工作区列表）与 `POST /dsh-fork-ws/fork`（执行克隆，可选 `atSeq` 分支锚点）；服务全部按名从 cordis 上下文读取，不 import 任何 `@deepseek-ai/*` 包。
+- **宿主端**：零依赖的 `lib/index.js`，通过 `webServer` 服务注册 API——`GET /dsh-fork-ws/prepare`（源会话信息 + 工作区列表 + 可选预设列表）与 `POST /dsh-fork-ws/fork`（执行克隆，可选 `atSeq` 分支锚点与 `agentPreset` 预设覆盖）；服务全部按名从 cordis 上下文读取，不 import 任何 `@deepseek-ai/*` 包。
 - **客户端**：不改框架源码的 DOM 增强——MutationObserver 向官方菜单注入入口、接管官方分支按钮点击（capture 阶段拦截），对话框用 `react-dom` 渲染。
 - **导出 / 导入**：手写零依赖 zip 打包/解析（CRC32 + deflate）；导出 = 官方同款条目（`session.jsonl` 解码文本 + `media/*` 附件）；导入 = 解析打包行（text-chunks 等，与官方 decodeStorageRecord 一致）→ 持久化层公开接口 `create` + 分批 `append` 写入（后端自动按本机压缩编码落盘，跨机器无需关心 zstd）→ 附件写回 `attachments/v1/objects/`。
 

@@ -1,21 +1,35 @@
 /**
  * dsh-fork-to-workspace — 工作区选择对话框。
  *
- * 流程：打开 → GET /dsh-fork-ws/prepare 取「源会话信息 + 现有工作区列表」
- * （排除源会话自身工作区）→ 用户点选目标工作区 → POST /dsh-fork-ws/fork
- * （可带 atSeq 指定分支边界）→ 等待子会话出现在客户端会话列表 → 打开子会话。
+ * 流程：打开 → GET /dsh-fork-ws/prepare 取「源会话信息 + 现有工作区列表 +
+ * 可选预设列表」→ 用户点选目标工作区（可选换预设）→ POST /dsh-fork-ws/fork
+ * （可带 atSeq 指定分支边界、agentPreset 指定子会话预设）→ 等待子会话出现
+ * 在客户端会话列表 → 打开子会话。
  */
 import * as React from 'react'
 import type { Context } from 'cordis'
 import { IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { t } from './texts.ts'
 
+/** 可选的 agent 预设（来自宿主 agentPresets.list() 的投影）。 */
+interface PresetOption {
+  id: string
+  /** system = 随部署内置；user = 本机自建（含插件提供的预设）。 */
+  trust: 'system' | 'user'
+  name?: string
+  description?: string
+  /** 配置损坏的预设：不可选（下拉禁用），hover 显示原因。 */
+  broken?: string
+  isDefault: boolean
+}
+
 /** 宿主 prepare 端点响应。 */
 type PrepareResponse =
   | {
     ok: true
-    source: { sessionId: string; title: string | null; workspaceId: string | null }
+    source: { sessionId: string; title: string | null; workspaceId: string | null; presetId: string | null }
     workspaces: readonly { workspaceId: string; title: string; path: string }[]
+    presets: readonly PresetOption[]
   }
   | { ok: false; error: string; code?: string }
 
@@ -66,9 +80,13 @@ export function ForkDialog({ sessionId, atSeq, ctx, onClose }: ForkDialogProps) 
   const [sourceTitle, setSourceTitle] = React.useState(sessionId)
   const [workspaces, setWorkspaces] = React.useState<readonly { workspaceId: string; title: string; path: string }[]>([])
   const [selected, setSelected] = React.useState<string | null>(null)
+  // 可选预设：'' = 保持源会话预设（默认，向后兼容）；否则为预设 id。
+  const [presetChoice, setPresetChoice] = React.useState('')
+  const [presets, setPresets] = React.useState<readonly PresetOption[]>([])
+  const [sourcePreset, setSourcePreset] = React.useState<string | null>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
 
-  // 打开时拉取源会话信息与工作区列表。
+  // 打开时拉取源会话信息、工作区列表与可选预设列表。
   React.useEffect(() => {
     let cancelled = false
     void fetch(`/dsh-fork-ws/prepare?sessionId=${encodeURIComponent(sessionId)}`)
@@ -81,8 +99,11 @@ export function ForkDialog({ sessionId, atSeq, ctx, onClose }: ForkDialogProps) 
           return
         }
         setSourceTitle(data.source.title ?? sessionId)
+        setSourcePreset(data.source.presetId)
         // 排除源会话自身的工作区（「克隆到其他工作区」语义）。
         setWorkspaces(data.workspaces.filter(workspace => workspace.workspaceId !== data.source.workspaceId))
+        // 预设列表：排除 broken 的之后仍可展示（禁用态）；空列表时隐藏下拉。
+        setPresets(data.presets)
         setPhase('ready')
       })
       .catch((cause: unknown) => {
@@ -125,6 +146,8 @@ export function ForkDialog({ sessionId, atSeq, ctx, onClose }: ForkDialogProps) 
         sessionId,
         workspaceId: selected,
         ...(atSeq === undefined ? {} : { atSeq }),
+        // 未选预设（'' = 保持源会话预设）时不传，宿主端继承源预设。
+        ...(presetChoice === '' ? {} : { agentPreset: presetChoice }),
       }),
     })
       .then(res => res.json() as Promise<ForkResponse>)
@@ -171,6 +194,42 @@ export function ForkDialog({ sessionId, atSeq, ctx, onClose }: ForkDialogProps) 
 
         {phase === 'ready' && (
           <>
+            {presets.length > 0 && (
+              <div className="fw-dialog-preset">
+                <div className="fw-dialog-section">{t('dialog.preset')}</div>
+                <select
+                  className="fw-preset-select"
+                  value={presetChoice}
+                  onChange={(event) => { setPresetChoice(event.target.value) }}
+                  aria-label={t('dialog.preset')}
+                >
+                  {/* 第一项：保持源会话预设（缺省，向后兼容）。 */}
+                  <option value="">
+                    {t('dialog.preset.keep', {
+                      preset: sourcePreset === null ? t('dialog.preset.keepNone') : sourcePreset,
+                    })}
+                  </option>
+                  {presets.map(preset => (
+                    <option
+                      key={preset.id}
+                      value={preset.id}
+                      disabled={preset.broken !== undefined}
+                      title={preset.broken === undefined
+                        ? undefined
+                        : t('dialog.preset.broken', { reason: preset.broken })}
+                    >
+                      {preset.name === undefined ? preset.id : preset.name}
+                      {' '}({preset.id})
+                      {preset.trust === 'system' ? ` · ${t('dialog.preset.system')}` : ` · ${t('dialog.preset.user')}`}
+                      {preset.isDefault ? ` · ${t('dialog.preset.default')}` : ''}
+                      {preset.broken !== undefined ? ` · ${t('dialog.preset.brokenShort')}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="fw-dialog-hint">{t('dialog.preset.hint')}</p>
+              </div>
+            )}
+
             <div className="fw-dialog-section">{t('dialog.workspace')}</div>
             {workspaces.length === 0 ? (
               <p className="fw-dialog-hint">{t('dialog.noOtherWorkspace')}</p>

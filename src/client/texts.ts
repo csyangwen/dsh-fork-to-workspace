@@ -115,6 +115,42 @@ const DICT: Record<string, { zh: string; en: string }> = {
     zh: '目标工作区（点击选择）',
     en: 'Target workspace (click to select)',
   },
+  'dialog.preset': {
+    zh: '分叉后的 Agent 预设（可选）',
+    en: 'Agent preset for the fork (optional)',
+  },
+  'dialog.preset.keep': {
+    zh: '保持源会话预设（{preset}）',
+    en: 'Keep source session preset ({preset})',
+  },
+  'dialog.preset.keepNone': {
+    zh: '未记录',
+    en: 'not recorded',
+  },
+  'dialog.preset.system': {
+    zh: '系统',
+    en: 'system',
+  },
+  'dialog.preset.user': {
+    zh: '本地',
+    en: 'local',
+  },
+  'dialog.preset.default': {
+    zh: '默认',
+    en: 'default',
+  },
+  'dialog.preset.broken': {
+    zh: '该预设配置损坏，不可选：{reason}',
+    en: 'This preset is broken and cannot be used: {reason}',
+  },
+  'dialog.preset.brokenShort': {
+    zh: '不可用',
+    en: 'broken',
+  },
+  'dialog.preset.hint': {
+    zh: '换预设只影响分叉后继续对话的轮次（工具面与人格由所选预设组合），历史消息与已完成回合保持不变；分叉成功后仍可在会话内另行切换。',
+    en: 'Switching the preset only affects turns continued after the fork (tools and persona come from the chosen preset); history and finished turns stay unchanged. You can also switch presets inside the session later.',
+  },
   'dialog.noOtherWorkspace': {
     zh: '没有其他可用的工作区。请先在左侧「添加工作区」后再试。',
     en: 'No other workspace available. Add one in the sidebar first.',

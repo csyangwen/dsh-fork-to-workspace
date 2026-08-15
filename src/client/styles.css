@@ -132,6 +132,35 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* 预设选择区：下拉 + 说明，与工作区列表之间留出呼吸感。 */
+.fw-dialog-preset {
+  margin-bottom: 16px;
+}
+
+.fw-preset-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary, inherit);
+  background: var(--dsw-alias-surface-default, inherit);
+  border: 1px solid var(--dsw-alias-border-default, currentColor);
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+.fw-preset-select:focus {
+  border-color: var(--dsw-alias-accent-strong, currentColor);
+}
+
+.fw-preset-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .fw-workspace-list {
   flex: 1;
   min-height: 0;

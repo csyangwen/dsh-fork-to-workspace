@@ -90,6 +90,16 @@ function makeCtx() {
           get(id) { return { id, session: liveSessions.get(id) } },
         }
         case 'agentPresets': return {
+          // fake 预设目录（与真实 agentPresets.list() 投影对齐）：
+          // standard=系统内置默认；anchored-standard=本地自建；broken-one=配置损坏。
+          async list() {
+            return [
+              { id: 'standard', trust: 'system', name: '标准模式', path: '/p/standard' },
+              { id: 'anchored-standard', trust: 'user', name: '锚定标准', path: '/p/anchored-standard' },
+              { id: 'broken-one', trust: 'user', broken: 'agent.cordis.yml 解析失败', path: '/p/broken-one' },
+            ]
+          },
+          get defaultId() { return 'standard' },
           async resolve(id) { return { id: id ?? 'default' } },
           async mount(agentCtx, id) { mounted.push({ id, hasCtx: Boolean(agentCtx) }) },
         }
@@ -312,6 +322,149 @@ test('冷会话（仅持久化）也可作为源分叉', async () => {
     assert.equal(ctx._created[0].meta.cwd, '/tmp/project-b')
     // 无标题事件 → 不重命名。
     assert.deepEqual(ctx._renamed, [])
+  } finally {
+    await server.close()
+  }
+})
+
+test('prepare 返回可选预设列表（含 trust/name/broken/isDefault）与源会话 presetId', async () => {
+  const ctx = makeCtx()
+  apply(ctx)
+  // 源会话带 header.agentPreset（anchored-standard）。
+  const id = 'session-source'
+  const events = makeEvents()
+  ctx._liveSessions.set(id, {
+    id,
+    header: { id, version: 0, createdAt: 0, cwd: '/tmp/project-a', agentPreset: 'anchored-standard' },
+    events,
+  })
+  ctx._workspaces[0].sessionIds.unshift(id)
+  const server = await serve(ctx._handler)
+  try {
+    const res = await request(server.base, 'GET', '/dsh-fork-ws/prepare?sessionId=session-source')
+    assert.equal(res.status, 200)
+    assert.equal(res.json.ok, true)
+    // 源会话当前预设：header 有值且事件里无 selected → 取 header。
+    assert.equal(res.json.source.presetId, 'anchored-standard')
+    // 预设列表：三个 fake 预设，字段投影完整。
+    assert.deepEqual(res.json.presets, [
+      { id: 'standard', trust: 'system', name: '标准模式', isDefault: true },
+      { id: 'anchored-standard', trust: 'user', name: '锚定标准', isDefault: false },
+      { id: 'broken-one', trust: 'user', broken: 'agent.cordis.yml 解析失败', isDefault: false },
+    ])
+  } finally {
+    await server.close()
+  }
+})
+
+test('fork 换预设：meta.agentPreset 为新值，种子 selected 事件被改写（不污染源）', async () => {
+  const ctx = makeCtx()
+  apply(ctx)
+  // 源会话事件里带一条 agent-preset/selected（anchored-standard），header 同值。
+  const id = 'session-source'
+  const events = makeEvents()
+  events.splice(0, 0, { seq: 0, type: 'agent-preset/selected', time: 1, data: { agentPreset: 'anchored-standard' } })
+  events.forEach((e, i) => { e.seq = i })
+  ctx._liveSessions.set(id, {
+    id,
+    header: { id, version: 0, createdAt: 0, cwd: '/tmp/project-a', agentPreset: 'anchored-standard' },
+    events,
+  })
+  ctx._workspaces[0].sessionIds.unshift(id)
+  const server = await serve(ctx._handler)
+  try {
+    const res = await request(server.base, 'POST', '/dsh-fork-ws/fork', {
+      sessionId: id, workspaceId: 'ws-target', agentPreset: 'standard',
+    })
+    assert.equal(res.json.ok, true)
+    const create = ctx._created[0]
+    // meta 记录新预设；mount 用新预设。
+    assert.equal(create.meta.agentPreset, 'standard')
+    assert.deepEqual(ctx._mounted, [{ id: 'standard', hasCtx: true }])
+    // 种子里的 selected 事件被改写为新预设（其余事件原样）。
+    const selected = create.seed.filter(e => e.type === 'agent-preset/selected')
+    assert.equal(selected.length, 1)
+    assert.equal(selected[0].data.agentPreset, 'standard')
+    assert.equal(create.seed[1].type, 'turn/start')
+    // 源会话未被污染：事件对象是共享引用，改写必须产出新对象。
+    assert.equal(ctx._liveSessions.get(id).events[0].data.agentPreset, 'anchored-standard')
+  } finally {
+    await server.close()
+  }
+})
+
+test('fork 换预设且源无 selected 事件：种子末尾追加一条', async () => {
+  const ctx = makeCtx()
+  apply(ctx)
+  seedSource(ctx)
+  const server = await serve(ctx._handler)
+  try {
+    const res = await request(server.base, 'POST', '/dsh-fork-ws/fork', {
+      sessionId: 'session-source', workspaceId: 'ws-target', agentPreset: 'anchored-standard',
+    })
+    assert.equal(res.json.ok, true)
+    const create = ctx._created[0]
+    assert.equal(create.meta.agentPreset, 'anchored-standard')
+    // 末尾追加 selected 事件，seq 顺延（源种子末 seq=8 → 9）。
+    const tail = create.seed.at(-1)
+    assert.equal(tail.type, 'agent-preset/selected')
+    assert.equal(tail.data.agentPreset, 'anchored-standard')
+    assert.equal(tail.seq, 9)
+    // seedLength 仍是源事件长度（追加事件不计入边界）。
+    assert.equal(create.meta.seedLength, 9)
+  } finally {
+    await server.close()
+  }
+})
+
+test('fork 换预设：预设不存在 / 配置损坏 → 友好错误，不创建会话', async () => {
+  const ctx = makeCtx()
+  apply(ctx)
+  seedSource(ctx)
+  const server = await serve(ctx._handler)
+  try {
+    const missing = await request(server.base, 'POST', '/dsh-fork-ws/fork', {
+      sessionId: 'session-source', workspaceId: 'ws-target', agentPreset: 'ghost-preset',
+    })
+    assert.equal(missing.json.ok, false)
+    assert.equal(missing.json.code, 'preset-not-found')
+    const broken = await request(server.base, 'POST', '/dsh-fork-ws/fork', {
+      sessionId: 'session-source', workspaceId: 'ws-target', agentPreset: 'broken-one',
+    })
+    assert.equal(broken.json.ok, false)
+    assert.equal(broken.json.code, 'preset-broken')
+    assert.match(broken.json.error, /解析失败/)
+    // 校验失败发生在创建之前，不应有任何会话被创建。
+    assert.equal(ctx._created.length, 0)
+  } finally {
+    await server.close()
+  }
+})
+
+test('fork 不传 agentPreset：保持源会话预设（事件优先）', async () => {
+  const ctx = makeCtx()
+  apply(ctx)
+  const id = 'session-source'
+  const events = makeEvents()
+  events.splice(0, 0, { seq: 0, type: 'agent-preset/selected', time: 1, data: { agentPreset: 'anchored-standard' } })
+  events.forEach((e, i) => { e.seq = i })
+  ctx._liveSessions.set(id, {
+    id,
+    header: { id, version: 0, createdAt: 0, cwd: '/tmp/project-a', agentPreset: 'standard' },
+    events,
+  })
+  ctx._workspaces[0].sessionIds.unshift(id)
+  const server = await serve(ctx._handler)
+  try {
+    const res = await request(server.base, 'POST', '/dsh-fork-ws/fork', {
+      sessionId: id, workspaceId: 'ws-target',
+    })
+    assert.equal(res.json.ok, true)
+    const create = ctx._created[0]
+    // 事件里最新 selected 是 anchored-standard（优先于 header 的 standard）。
+    assert.equal(create.meta.agentPreset, 'anchored-standard')
+    // 未显式换预设 → 种子原样，selected 事件未被改写。
+    assert.equal(create.seed[0].data.agentPreset, 'anchored-standard')
   } finally {
     await server.close()
   }

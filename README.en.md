@@ -72,6 +72,17 @@ turns a good branch into a new project.**
   - **Clone to current workspace**: identical to the official fork behavior;
   - **Clone to another workspace…**: supports **any turn** — the officially
     disabled branch buttons on non-final turns are enabled too.
+- **Optional Agent preset selection when forking**
+  - The fork dialog gains an "Agent preset" dropdown: by default it **keeps
+    the source session's preset** (backward compatible), but any local preset
+    can be chosen instead (shipped system presets + locally authored ones;
+    broken presets are disabled with the reason shown);
+  - Switching the preset only affects turns **continued after** the fork
+    (tools and persona come from the chosen preset); history and finished
+    turns are kept verbatim;
+  - E.g. fork an `anchored-standard` high-quality branch onto the official
+    `standard` preset as a control test, or onto a custom
+    "anchored + extra plugins" preset — presets and plugins compose freely.
 - **Session export / import (cross-machine migration)**
   - **Export session…**: packs the session (full log + image attachments) into
     a `dsh-session-<id>.zip` download (same layout as the official export);
@@ -120,8 +131,9 @@ sidebar session menu.
 
 1. Hover a session row and click its "…" button;
 2. Choose "Fork session to another workspace…";
-3. Pick the target workspace (directory) in the dialog and click "Clone to
-   this workspace";
+3. In the dialog, optionally pick an "Agent preset" (leave it unset to keep
+   the source session's preset), then choose the target workspace (directory)
+   and click "Clone to this workspace";
 4. The new session opens automatically, titled `Original (1)`, grouped under
    the target workspace.
 
@@ -143,8 +155,13 @@ actually ran** (recorded in the session header and event log, e.g.
 `anchored-standard`) — it is part of the performance baseline, and it travels
 with the branch:
 
-- **Clone (fork)**: the child inherits the source's preset; on the same
-  machine this is usually a no-op (the preset is already installed);
+- **Clone (fork)**: the child inherits the source's preset by default; on the
+  same machine this is usually a no-op (the preset is already installed). You
+  can also **explicitly switch the preset in the fork dialog** — the latest
+  `agent-preset/selected` event in the child's log is rewritten to the new
+  value (the official resolution rule prefers the latest event over the
+  header, so rewriting only the header would not take effect), and the child
+  composes its agent from the chosen preset when opened;
 - **Import on another machine**: the target DSH **must have the same preset
   installed**, otherwise opening the imported session fails (agent composition
   cannot be built). See the
@@ -166,11 +183,12 @@ with the branch:
   target workspace path, then attaches it through the official
   `workspace.attachSession` validation, so the child naturally appears under
   the target workspace group.
-- **Host side**: a zero-dependency `lib/index.js` registers two APIs through
+- **Host side**: a zero-dependency `lib/index.js` registers APIs through
   the `webServer` service — `GET /dsh-fork-ws/prepare` (source info +
-  workspace list) and `POST /dsh-fork-ws/fork` (perform the clone, optional
-  `atSeq` anchor). All services are read by name from the cordis context; no
-  `@deepseek-ai/*` package is imported.
+  workspace list + optional preset roster) and `POST /dsh-fork-ws/fork`
+  (perform the clone, optional `atSeq` anchor and `agentPreset` override). All
+  services are read by name from the cordis context; no `@deepseek-ai/*`
+  package is imported.
 - **Client side**: DOM enhancement without touching framework source — a
   MutationObserver injects the sidebar menu entry and takes over the official
   branch button (capture-phase interception); the dialog is rendered with
