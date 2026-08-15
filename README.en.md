@@ -59,6 +59,16 @@ turns a good branch into a new project.**
   - **Clone to current workspace**: identical to the official fork behavior;
   - **Clone to another workspace…**: supports **any turn** — the officially
     disabled branch buttons on non-final turns are enabled too.
+- **Session export / import (cross-machine migration)**
+  - **Export session…**: packs the session (full log + image attachments) into
+    a `dsh-session-<id>.zip` download (same layout as the official export);
+  - **Import session…**: pick the zip file and an optional target workspace —
+    the session is written into the current DSH (log re-encoded with the local
+    compression backend, attachments written back by content addressing), then
+    appears under the target workspace group and can be opened directly;
+  - Cross-machine key: choosing a target workspace rewrites the session's
+    `cwd` to a local path so it lands in that workspace (otherwise the
+    original directory is kept and the session appears under Ungrouped).
 
 ## Install
 
@@ -134,6 +144,14 @@ sidebar session menu.
   MutationObserver injects the sidebar menu entry and takes over the official
   branch button (capture-phase interception); the dialog is rendered with
   `react-dom`.
+- **Export / import**: hand-written zero-dependency zip packing/parsing
+  (CRC32 + deflate). Export produces the official entry layout
+  (`session.jsonl` decoded text + `media/*` attachments); import decodes
+  packed chunk rows (text-chunks etc., matching official
+  `decodeStorageRecord`), then writes through the persistence layer's public
+  `create` + batched `append` (the local backend re-encodes with its own
+  compression, so zstd never leaks across machines) and restores attachments
+  under `attachments/v1/objects/`.
 
 ## Build from source (optional)
 
