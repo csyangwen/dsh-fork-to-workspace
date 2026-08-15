@@ -9,6 +9,19 @@ point of new projects.
 A community project. Not an official DeepSeek plugin and not affiliated with or
 endorsed by DeepSeek.
 
+## Ready-made high-quality branch package
+
+[Download the session package: dsh-无let me高质量分支-导入后使用-26081501.zip](./dsh-无let%20me高质量分支-导入后使用-26081501.zip)
+
+A verified high-quality session branch with **no `let me` reasoning chains**
+(works with DeepSeek Pro and Flash). On any DSH: open a workspace row's "…"
+menu → "Import session into this workspace…" → pick this zip → import. No
+tuning required.
+
+> Install [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard)
+> first, otherwise opening the imported session will fail (see "Preset
+> dependency" below).
+
 ## What problem does it solve
 
 DeepSeek Harness sessions form a branch tree: different forks cut from the same
